@@ -1,4 +1,12 @@
-export const OWNERS = ['Eric', 'Ray Marie', 'Matthew', 'Carson', 'Drew', 'Dom']
+export const OWNERS = [
+  'Carson',
+  'Dom',
+  'Drew',
+  'Eric',
+  'Gavin',
+  'Matthew',
+  'Ray Marie',
+]
 
 export const STATUSES = [
   { value: 'open', label: 'Open' },

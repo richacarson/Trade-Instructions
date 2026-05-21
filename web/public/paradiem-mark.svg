@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Paradiem">
+  <g transform="translate(8 1)" fill="#9BAF87">
+    <path d="M24 1 L26.4 5.6 L31 8 L26.4 10.4 L24 15 L21.6 10.4 L17 8 L21.6 5.6 Z" />
+    <rect x="13" y="19" width="4" height="9" />
+    <rect x="19" y="11" width="4" height="17" />
+    <rect x="25" y="11" width="4" height="17" />
+    <rect x="31" y="19" width="4" height="9" />
+    <path d="M8 24 H40 V40 C40 50.5 33 57 24 61 C15 57 8 50.5 8 40 Z" />
+  </g>
+</svg>

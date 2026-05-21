@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+web/dist/
+
+# env files (NEVER commit real credentials)
+.env
+.env.local
+.env.*.local
+web/.env
+web/.env.local
+web/.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# editor / OS cruft
+.DS_Store
+.vscode/
+.idea/
+.vite/

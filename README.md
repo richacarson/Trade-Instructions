@@ -25,7 +25,7 @@ executed, and then never re-read.
 | Frontend   | React 18 + Vite + Tailwind CSS, deployed to GitHub Pages      |
 | Routing    | React Router (`HashRouter` — works on GitHub Pages with no server config) |
 | Backend    | Supabase (Postgres + Auth + Realtime + Row Level Security)    |
-| Auth       | Supabase Auth with Microsoft sign-in (Entra ID), restricted to an email allowlist |
+| Auth       | Supabase Auth — email + password, account creation locked to an email allowlist |
 
 ---
 
@@ -66,14 +66,16 @@ executed, and then never re-read.
 2. Paste the entire contents of `supabase/migrations/0001_init.sql` and run it.
    This creates all tables, indexes, triggers, Row Level Security policies, and
    adds the realtime tables to the `supabase_realtime` publication.
+3. Paste the contents of `supabase/migrations/0002_signup_allowlist.sql` and run
+   it. This locks account creation to allowlisted emails.
 
 ### 3. Seed the allowlist
 
 Only emails in the `allowed_users` table can sign in.
 
 1. **Edit `supabase/seed.sql` first** — replace every `lastname` placeholder with
-   each teammate's real Microsoft 365 email. The email must match their Microsoft
-   sign-in address exactly (matching is case-insensitive).
+   each teammate's real work email. This is the address they will use to create
+   their account and sign in (matching is case-insensitive).
 2. Paste the edited `seed.sql` into the SQL Editor and run it.
 
 Add or remove people later:
@@ -85,39 +87,33 @@ insert into allowed_users (email) values ('first.last@paradiem.org')
 delete from allowed_users where email = 'first.last@paradiem.org';
 ```
 
-### 4. Configure Microsoft sign-in
+### 4. Sign-in: email + password
 
-The team uses Microsoft 365 accounts, so sign-in goes through Microsoft Entra ID
-(Azure AD).
+No company IT/admin access is required. Sign-in uses Supabase's built-in email +
+password auth, and the `0002` migration locks account creation to the allowlist —
+so only the emails seeded in step 3 can ever register. Each teammate chooses
+their own password.
 
-**In the Microsoft Entra admin center** (<https://entra.microsoft.com>):
+In the Supabase dashboard:
 
-1. Go to **Identity → Applications → App registrations → New registration**.
-2. Name it `IOWN Trade Instructions`.
-3. **Supported account types:** choose **Accounts in this organizational
-   directory only (single tenant)** so only Paradiem accounts can sign in.
-4. **Redirect URI:** platform **Web**, value
-   `https://<your-project-ref>.supabase.co/auth/v1/callback`
-5. Click **Register**. From the overview page, copy the
-   **Application (client) ID** and the **Directory (tenant) ID**.
-6. Go to **Certificates & secrets → New client secret**, add one, and copy the
-   secret's **Value** immediately (it is hidden after you leave the page).
+1. **Authentication → Sign In / Providers → Email** is enabled by default — leave
+   it on.
+2. In the Email provider settings, decide on **Confirm email**:
+   - **Off (recommended for a simple rollout):** a teammate picks a password and
+     gets straight in — no confirmation email to wait for. The allowlist is what
+     keeps outsiders out. Have everyone sign up promptly after launch.
+   - **On:** each person must click a link emailed to them before they can sign
+     in. More verification, but it depends on Supabase email delivery working.
+3. **Authentication → URL Configuration → Site URL:**
+   `https://richacarson.github.io/trade-instructions/`
+   (used for email links when Confirm email is on).
 
-**In the Supabase dashboard:**
+**How teammates get in:** each person opens the app, clicks **"First time here?
+Create your account"**, enters their work email and a password they choose, and
+they're in. Anyone whose email is not on the allowlist is turned away.
 
-1. **Authentication → Sign In / Providers → Azure** → enable it.
-2. **Application (Client) ID** — paste the client ID.
-3. **Secret Value** — paste the client secret value.
-4. **Azure Tenant URL** — `https://login.microsoftonline.com/<your-tenant-id>`
-   (restricts sign-in to the Paradiem tenant).
-5. Save.
-
-Then set the app URLs under **Authentication → URL Configuration**:
-
-- **Site URL:** `https://richacarson.github.io/trade-instructions/`
-- **Redirect URLs** — add both:
-  - `https://richacarson.github.io/trade-instructions/**`
-  - `http://localhost:5173/trade-instructions/**`
+To reset a forgotten password, an account owner can do it from **Authentication →
+Users** in the Supabase dashboard.
 
 ### 5. Local environment variables
 

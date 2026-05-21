@@ -4,9 +4,9 @@
 -- Only emails listed here can sign in and use the dashboard.
 --
 -- IMPORTANT: replace every "lastname" placeholder below with each
--- teammate's REAL Microsoft 365 account email before deploying. The
--- email must match their Microsoft sign-in address exactly
--- (matching is case-insensitive).
+-- teammate's REAL work email before deploying. This is the address
+-- they will use to create their account and sign in (matching is
+-- case-insensitive). Only emails listed here can register.
 --
 -- Add a teammate later with:
 --   insert into allowed_users (email) values ('first.last@paradiem.org')

@@ -10,8 +10,11 @@ export default function Login() {
     setBusy(true)
     setError(null)
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin + import.meta.env.BASE_URL },
+      provider: 'azure',
+      options: {
+        scopes: 'email',
+        redirectTo: window.location.origin + import.meta.env.BASE_URL,
+      },
     })
     if (error) {
       setError(error.message)
@@ -29,7 +32,7 @@ export default function Login() {
         <p className="mt-1 text-sm text-sage">IOWN investment team</p>
 
         <button onClick={signIn} disabled={busy} className="btn-primary mt-8 w-full">
-          {busy ? 'Redirecting…' : 'Sign in with Google'}
+          {busy ? 'Redirecting…' : 'Sign in with Microsoft'}
         </button>
 
         {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}

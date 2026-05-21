@@ -25,7 +25,7 @@ executed, and then never re-read.
 | Frontend   | React 18 + Vite + Tailwind CSS, deployed to GitHub Pages      |
 | Routing    | React Router (`HashRouter` — works on GitHub Pages with no server config) |
 | Backend    | Supabase (Postgres + Auth + Realtime + Row Level Security)    |
-| Auth       | Supabase Auth with Google sign-in, restricted to an email allowlist |
+| Auth       | Supabase Auth with Microsoft sign-in (Entra ID), restricted to an email allowlist |
 
 ---
 
@@ -72,7 +72,7 @@ executed, and then never re-read.
 Only emails in the `allowed_users` table can sign in.
 
 1. **Edit `supabase/seed.sql` first** — replace every `lastname` placeholder with
-   each teammate's real Google account email. The email must match their Google
+   each teammate's real Microsoft 365 email. The email must match their Microsoft
    sign-in address exactly (matching is case-insensitive).
 2. Paste the edited `seed.sql` into the SQL Editor and run it.
 
@@ -85,25 +85,39 @@ insert into allowed_users (email) values ('first.last@paradiem.org')
 delete from allowed_users where email = 'first.last@paradiem.org';
 ```
 
-### 4. Configure Google sign-in
+### 4. Configure Microsoft sign-in
 
-**In the Google Cloud Console:**
+The team uses Microsoft 365 accounts, so sign-in goes through Microsoft Entra ID
+(Azure AD).
 
-1. Create (or pick) a project → **APIs & Services → Credentials**.
-2. Create an **OAuth client ID** of type **Web application**.
-3. Under **Authorized redirect URIs**, add:
+**In the Microsoft Entra admin center** (<https://entra.microsoft.com>):
+
+1. Go to **Identity → Applications → App registrations → New registration**.
+2. Name it `IOWN Trade Instructions`.
+3. **Supported account types:** choose **Accounts in this organizational
+   directory only (single tenant)** so only Paradiem accounts can sign in.
+4. **Redirect URI:** platform **Web**, value
    `https://<your-project-ref>.supabase.co/auth/v1/callback`
-4. Copy the generated **Client ID** and **Client secret**.
+5. Click **Register**. From the overview page, copy the
+   **Application (client) ID** and the **Directory (tenant) ID**.
+6. Go to **Certificates & secrets → New client secret**, add one, and copy the
+   secret's **Value** immediately (it is hidden after you leave the page).
 
 **In the Supabase dashboard:**
 
-1. **Authentication → Providers → Google** → enable it, paste the Client ID and
-   Client secret, save.
-2. **Authentication → URL Configuration**:
-   - **Site URL:** `https://richacarson.github.io/trade-instructions/`
-   - **Redirect URLs** — add both:
-     - `https://richacarson.github.io/trade-instructions/**`
-     - `http://localhost:5173/trade-instructions/**`
+1. **Authentication → Sign In / Providers → Azure** → enable it.
+2. **Application (Client) ID** — paste the client ID.
+3. **Secret Value** — paste the client secret value.
+4. **Azure Tenant URL** — `https://login.microsoftonline.com/<your-tenant-id>`
+   (restricts sign-in to the Paradiem tenant).
+5. Save.
+
+Then set the app URLs under **Authentication → URL Configuration**:
+
+- **Site URL:** `https://richacarson.github.io/trade-instructions/`
+- **Redirect URLs** — add both:
+  - `https://richacarson.github.io/trade-instructions/**`
+  - `http://localhost:5173/trade-instructions/**`
 
 ### 5. Local environment variables
 

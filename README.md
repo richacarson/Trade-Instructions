@@ -98,15 +98,13 @@ In the Supabase dashboard:
 
 1. **Authentication → Sign In / Providers → Email** is enabled by default — leave
    it on.
-2. In the Email provider settings, decide on **Confirm email**:
-   - **Off (recommended for a simple rollout):** a teammate picks a password and
-     gets straight in — no confirmation email to wait for. The allowlist is what
-     keeps outsiders out. Have everyone sign up promptly after launch.
-   - **On:** each person must click a link emailed to them before they can sign
-     in. More verification, but it depends on Supabase email delivery working.
+2. In the Email provider settings, turn **Confirm email** OFF. New teammates
+   then pick a password and get straight in, with no confirmation email to wait
+   for — the allowlist is what keeps outsiders out. (Have everyone sign up within
+   the first day or two after launch.)
 3. **Authentication → URL Configuration → Site URL:**
    `https://richacarson.github.io/trade-instructions/`
-   (used for email links when Confirm email is on).
+   (the app's canonical URL).
 
 **How teammates get in:** each person opens the app, clicks **"First time here?
 Create your account"**, enters their work email and a password they choose, and

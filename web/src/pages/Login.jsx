@@ -19,6 +19,7 @@ export default function Login() {
   const [mode, setMode] = useState('signin') // 'signin' | 'signup'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
@@ -27,6 +28,7 @@ export default function Login() {
 
   const switchMode = () => {
     setMode(isSignup ? 'signin' : 'signup')
+    setConfirmPassword('')
     setError(null)
     setInfo(null)
   }
@@ -43,6 +45,10 @@ export default function Login() {
     }
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
+      return
+    }
+    if (isSignup && password !== confirmPassword) {
+      setError("Passwords don't match.")
       return
     }
 
@@ -136,6 +142,22 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
+          {isSignup ? (
+            <div>
+              <label className="label" htmlFor="confirm-password">
+                Confirm password
+              </label>
+              <input
+                id="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                className="input"
+                placeholder="Type your password again"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+          ) : null}
           <button type="submit" disabled={busy} className="btn-primary w-full">
             {busy ? 'Please wait…' : isSignup ? 'Create account' : 'Sign in'}
           </button>

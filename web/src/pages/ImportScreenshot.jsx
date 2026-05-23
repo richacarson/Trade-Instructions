@@ -106,14 +106,11 @@ export default function ImportScreenshot() {
       return URL.createObjectURL(file)
     })
     setExtracting(true)
-    setStatus('Compressing image…')
+    setStatus('Loading…')
     try {
       const compressed = await compressImage(file)
       setCompressedBlob(compressed)
-      const sizeKb = Math.round(compressed.size / 1024)
-      setStatus(`Compressed to ${sizeKb} KB. Encoding…`)
       const base64 = await fileToBase64(compressed)
-      setStatus(`Uploading to extractor (${Math.round(base64.length / 1024)} KB base64)…`)
 
       const {
         data: { session },
@@ -134,7 +131,6 @@ export default function ImportScreenshot() {
           body: JSON.stringify({ image: base64, mimeType: 'image/jpeg' }),
         },
       )
-      setStatus(`Received HTTP ${resp.status}. Parsing…`)
       const text = await resp.text()
       let data
       try {

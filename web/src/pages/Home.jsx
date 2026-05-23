@@ -16,22 +16,27 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [ownerFilter, setOwnerFilter] = useState(null)
   const [clientFilter, setClientFilter] = useState(null)
+  const [tab, setTab] = useState('open') // 'open' | 'completed'
 
   const load = useCallback(async () => {
+    const statuses = tab === 'open' ? OPEN_STATUSES : ['done']
+    const order = tab === 'open'
+      ? { col: 'updated_at', asc: true } // stalest first
+      : { col: 'completed_at', asc: false } // most recent first
     const { data, error } = await supabase
       .from('instructions')
       .select(
-        'id,title,owner,status,created_at,updated_at,client_id,clients(name,household_name)',
+        'id,title,owner,status,created_at,updated_at,completed_at,client_id,clients(name,household_name)',
       )
-      .in('status', OPEN_STATUSES)
-      .order('updated_at', { ascending: true })
+      .in('status', statuses)
+      .order(order.col, { ascending: order.asc })
     if (error) setError(error.message)
     else {
       setItems(data ?? [])
       setError(null)
     }
     setLoading(false)
-  }, [])
+  }, [tab])
 
   useEffect(() => {
     load()
@@ -73,14 +78,35 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 md:px-8 md:py-7">
-      <header className="mb-5">
+      <header className="mb-4">
         <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
-          All Open Instructions
+          Instructions
         </h1>
         <p className="mt-1 text-sm text-slate-400">
-          {filtered.length} open · stalest first
+          {filtered.length} {tab === 'open' ? 'open · stalest first' : 'completed · most recent first'}
         </p>
       </header>
+
+      <div className="mb-4 inline-flex rounded-lg border border-white/10 bg-white/5 p-1">
+        <button
+          type="button"
+          onClick={() => setTab('open')}
+          className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition ${
+            tab === 'open' ? 'bg-gold text-navy' : 'text-slate-300 hover:text-slate-100'
+          }`}
+        >
+          Open
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('completed')}
+          className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition ${
+            tab === 'completed' ? 'bg-gold text-navy' : 'text-slate-300 hover:text-slate-100'
+          }`}
+        >
+          Completed
+        </button>
+      </div>
 
       {owners.length > 0 || clientOptions.length > 1 ? (
         <div className="mb-4 space-y-2">

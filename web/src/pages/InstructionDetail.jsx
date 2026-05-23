@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { STATUSES } from '../lib/constants'
@@ -20,6 +20,7 @@ const ACTION_TEXT = {
 
 export default function InstructionDetail() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { email } = useAuth()
   const [data, setData] = useState(null)
   const [steps, setSteps] = useState([])
@@ -150,6 +151,21 @@ export default function InstructionDetail() {
     }
   }
 
+  const deleteInstruction = async () => {
+    if (!window.confirm('Delete this instruction permanently? This cannot be undone.')) {
+      return
+    }
+    if (data?.screenshot_path) {
+      await supabase.storage.from('screenshots').remove([data.screenshot_path])
+    }
+    const { error } = await supabase.from('instructions').delete().eq('id', id)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    navigate('/')
+  }
+
   const submitNote = async (e) => {
     e.preventDefault()
     const text = note.trim()
@@ -202,17 +218,26 @@ export default function InstructionDetail() {
         </div>
       ) : null}
 
-      <header className="mb-5">
-        <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
-          {data.title}
-        </h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <StaleBadge createdAt={data.created_at} />
-          {data.meeting_date ? (
-            <span>· Meeting {formatDate(data.meeting_date)}</span>
-          ) : null}
-          <span>· Source: {data.source}</span>
+      <header className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
+            {data.title}
+          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <StaleBadge createdAt={data.created_at} />
+            {data.meeting_date ? (
+              <span>· Meeting {formatDate(data.meeting_date)}</span>
+            ) : null}
+            <span>· Source: {data.source}</span>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={deleteInstruction}
+          className="shrink-0 rounded-md border border-red-400/30 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-400/10"
+        >
+          Delete
+        </button>
       </header>
 
       <div className="card mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">

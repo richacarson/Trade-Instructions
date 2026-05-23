@@ -78,13 +78,21 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 md:px-8 md:py-7">
-      <header className="mb-4">
-        <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
-          Instructions
-        </h1>
-        <p className="mt-1 text-sm text-slate-400">
-          {filtered.length} {tab === 'open' ? 'open · stalest first' : 'completed · most recent first'}
-        </p>
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
+            Instructions
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            {filtered.length} {tab === 'open' ? 'open · stalest first' : 'completed · most recent first'}
+          </p>
+        </div>
+        <Link
+          to="/new/screenshot"
+          className="shrink-0 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-medium text-gold hover:bg-gold/20"
+        >
+          Import
+        </Link>
       </header>
 
       <div className="mb-4 inline-flex rounded-lg border border-white/10 bg-white/5 p-1">
@@ -141,10 +149,8 @@ export default function Home() {
       ) : filtered.length === 0 ? (
         items.length === 0 ? (
           <EmptyState
-            title="No open instructions"
-            hint="The team is all caught up. Add a new instruction when one comes in."
-            actionTo="/new"
-            actionLabel="New instruction"
+            title={tab === 'open' ? 'No open instructions' : 'No completed instructions'}
+            hint={tab === 'open' ? 'The team is all caught up.' : 'Completed instructions will show up here.'}
           />
         ) : (
           <EmptyState

@@ -29,6 +29,7 @@ export default function InstructionDetail() {
   const [error, setError] = useState(null)
   const [note, setNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [screenshotUrl, setScreenshotUrl] = useState(null)
 
   const load = useCallback(async () => {
     const [insRes, stepRes, actRes] = await Promise.all([
@@ -64,6 +65,23 @@ export default function InstructionDetail() {
     setError(null)
     setLoading(false)
   }, [id])
+
+  useEffect(() => {
+    if (!data?.screenshot_path) {
+      setScreenshotUrl(null)
+      return
+    }
+    let cancelled = false
+    supabase.storage
+      .from('screenshots')
+      .createSignedUrl(data.screenshot_path, 60 * 60)
+      .then(({ data: signed }) => {
+        if (!cancelled) setScreenshotUrl(signed?.signedUrl ?? null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [data?.screenshot_path])
 
   useEffect(() => {
     load()
@@ -264,6 +282,19 @@ export default function InstructionDetail() {
             {data.raw_text}
           </p>
         </details>
+      ) : null}
+
+      {screenshotUrl ? (
+        <div className="card mb-4 p-4">
+          <h2 className="label mb-2">Screenshot</h2>
+          <a href={screenshotUrl} target="_blank" rel="noreferrer">
+            <img
+              src={screenshotUrl}
+              alt="Source screenshot"
+              className="max-h-[480px] w-full rounded-md object-contain"
+            />
+          </a>
+        </div>
       ) : null}
 
       <div className="card p-4">

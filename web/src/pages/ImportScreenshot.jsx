@@ -78,6 +78,7 @@ export default function ImportScreenshot() {
   const [extracting, setExtracting] = useState(false)
   const [status, setStatus] = useState(null)
   const [items, setItems] = useState([]) // editable extracted rows
+  const [compressedBlob, setCompressedBlob] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -108,6 +109,7 @@ export default function ImportScreenshot() {
     setStatus('Compressing image…')
     try {
       const compressed = await compressImage(file)
+      setCompressedBlob(compressed)
       const sizeKb = Math.round(compressed.size / 1024)
       setStatus(`Compressed to ${sizeKb} KB. Encoding…`)
       const base64 = await fileToBase64(compressed)
@@ -189,6 +191,26 @@ export default function ImportScreenshot() {
     }
     setSaving(true)
     try {
+      // Upload the screenshot once, then attach the same path to every
+      // instruction created from it.
+      let screenshotPath = null
+      if (compressedBlob) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        const userId = user?.id ?? 'anon'
+        screenshotPath = `${userId}/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}.jpg`
+        const { error: upErr } = await supabase.storage
+          .from('screenshots')
+          .upload(screenshotPath, compressedBlob, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          })
+        if (upErr) throw new Error(`Upload failed: ${upErr.message}`)
+      }
+
       let createdId = null
       for (const it of toCreate) {
         let clientId = it.clientChoice.id
@@ -219,6 +241,7 @@ export default function ImportScreenshot() {
             owner: it.owner || null,
             source: 'screenshot',
             raw_text: it.raw_text || null,
+            screenshot_path: screenshotPath,
           })
           .select('id')
           .single()

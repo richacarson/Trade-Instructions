@@ -99,9 +99,16 @@ export default function NewInstruction() {
       >
         <BackIcon width={16} height={16} /> All open
       </Link>
-      <h1 className="mb-5 font-display text-2xl text-slate-100 md:text-3xl">
+      <h1 className="mb-3 font-display text-2xl text-slate-100 md:text-3xl">
         New Instruction
       </h1>
+
+      <Link
+        to="/new/screenshot"
+        className="mb-5 inline-flex items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-medium text-gold hover:bg-gold/20"
+      >
+        Import from screenshot
+      </Link>
 
       <form onSubmit={submit} className="space-y-4">
         <div>

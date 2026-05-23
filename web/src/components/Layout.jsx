@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import Logo from './Logo'
-import { HomeIcon } from './Icons'
+import { HomeIcon, PlusIcon } from './Icons'
 
 const NAV = [
   { to: '/', label: 'All Open', Icon: HomeIcon, end: true },
+  { to: '/new', label: 'New', Icon: PlusIcon, end: false },
 ]
 
 function deskLink({ isActive }) {

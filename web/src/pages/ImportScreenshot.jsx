@@ -20,6 +20,41 @@ function fileToBase64(file) {
   })
 }
 
+// Downscale + JPEG-encode an image so the request body stays under the
+// Supabase Edge Function payload cap (~6 MB) while keeping text readable
+// for Gemini's OCR.
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve(img)
+    }
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url)
+      reject(e)
+    }
+    img.src = url
+  })
+}
+
+async function compressImage(file, maxDim = 1600, quality = 0.85) {
+  const img = await loadImage(file)
+  const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+  const w = Math.round(img.width * scale)
+  const h = Math.round(img.height * scale)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0, w, h)
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', quality),
+  )
+  return blob
+}
+
 function buildTitle(item) {
   const amt = item.amount
     ? `$${Number(item.amount).toLocaleString(undefined, {
@@ -70,10 +105,11 @@ export default function ImportScreenshot() {
     })
     setExtracting(true)
     try {
-      const base64 = await fileToBase64(file)
+      const compressed = await compressImage(file)
+      const base64 = await fileToBase64(compressed)
       const { data, error: fnError } = await supabase.functions.invoke(
         'extract-instructions',
-        { body: { image: base64, mimeType: file.type || 'image/png' } },
+        { body: { image: base64, mimeType: 'image/jpeg' } },
       )
       if (fnError) throw fnError
       if (data?.error) throw new Error(data.error)

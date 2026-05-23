@@ -152,7 +152,7 @@ export default function ImportScreenshot() {
         rows.map((r) => ({
           ...r,
           title: buildTitle(r),
-          owner: null,
+          owner: 'Carson',
           clientChoice: prefillClient(clients, r.client_name),
           include: true,
         })),

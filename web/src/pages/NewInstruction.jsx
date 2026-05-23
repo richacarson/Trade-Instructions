@@ -12,7 +12,7 @@ export default function NewInstruction() {
   const [clientChoice, setClientChoice] = useState(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [owner, setOwner] = useState(null)
+  const [owner, setOwner] = useState('Carson')
   const [meetingDate, setMeetingDate] = useState('')
   const [steps, setSteps] = useState([''])
   const [saving, setSaving] = useState(false)

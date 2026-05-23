@@ -39,7 +39,7 @@ function loadImage(file) {
   })
 }
 
-async function compressImage(file, maxDim = 1600, quality = 0.85) {
+async function compressImage(file, maxDim = 1280, quality = 0.8) {
   const img = await loadImage(file)
   const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
   const w = Math.round(img.width * scale)
@@ -76,6 +76,7 @@ export default function ImportScreenshot() {
   const [clients, setClients] = useState([])
   const [previewUrl, setPreviewUrl] = useState(null)
   const [extracting, setExtracting] = useState(false)
+  const [status, setStatus] = useState(null)
   const [items, setItems] = useState([]) // editable extracted rows
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -104,14 +105,44 @@ export default function ImportScreenshot() {
       return URL.createObjectURL(file)
     })
     setExtracting(true)
+    setStatus('Compressing image…')
     try {
       const compressed = await compressImage(file)
+      const sizeKb = Math.round(compressed.size / 1024)
+      setStatus(`Compressed to ${sizeKb} KB. Encoding…`)
       const base64 = await fileToBase64(compressed)
-      const { data, error: fnError } = await supabase.functions.invoke(
-        'extract-instructions',
-        { body: { image: base64, mimeType: 'image/jpeg' } },
+      setStatus(`Uploading to extractor (${Math.round(base64.length / 1024)} KB base64)…`)
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not signed in.')
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+      const resp = await fetch(
+        `${supabaseUrl}/functions/v1/extract-instructions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ image: base64, mimeType: 'image/jpeg' }),
+        },
       )
-      if (fnError) throw fnError
+      setStatus(`Received HTTP ${resp.status}. Parsing…`)
+      const text = await resp.text()
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch {
+        throw new Error(`Non-JSON ${resp.status}: ${text.slice(0, 200)}`)
+      }
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}: ${data?.error || text.slice(0, 200)}`)
+      }
       if (data?.error) throw new Error(data.error)
       const rows = Array.isArray(data?.instructions) ? data.instructions : []
       if (rows.length === 0) {
@@ -132,6 +163,7 @@ export default function ImportScreenshot() {
       setError(err.message ?? 'Could not extract instructions.')
     } finally {
       setExtracting(false)
+      setStatus(null)
     }
   }
 
@@ -246,8 +278,8 @@ export default function ImportScreenshot() {
       </div>
 
       {extracting ? (
-        <div className="flex items-center justify-center py-10">
-          <Spinner label="Reading screenshot…" />
+        <div className="flex flex-col items-center gap-2 py-10">
+          <Spinner label={status || 'Reading screenshot…'} />
         </div>
       ) : null}
 

@@ -410,8 +410,11 @@ export default function ImportScreenshot() {
 
 function prefillClient(clients, name) {
   if (!name) return null
-  const lower = name.trim().toLowerCase()
+  const trimmed = name.trim()
+  const lower = trimmed.toLowerCase()
   const match = clients.find((c) => c.name.toLowerCase() === lower)
   if (match) return { id: match.id, name: match.name }
-  return null
+  // No existing client matches — pre-select "create new client with this name"
+  // so the operator doesn't have to pick anything.
+  return { id: null, name: trimmed }
 }

@@ -1,11 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import Logo from './Logo'
-import { HomeIcon, ClientsIcon, PlusIcon } from './Icons'
+import { HomeIcon, PlusIcon } from './Icons'
 
 const NAV = [
   { to: '/', label: 'All Open', Icon: HomeIcon, end: true },
-  { to: '/clients', label: 'Clients', Icon: ClientsIcon, end: false },
   { to: '/new', label: 'New', Icon: PlusIcon, end: false },
 ]
 

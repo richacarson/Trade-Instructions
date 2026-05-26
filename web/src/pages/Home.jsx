@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 import { OPEN_STATUSES } from '../lib/constants'
 import { relativeTime } from '../lib/format'
 import Spinner from '../components/Spinner'
@@ -11,6 +12,7 @@ import { ErrorBox, EmptyState } from '../components/States'
 const GRID = 'md:grid md:grid-cols-[1.1fr_2fr_0.8fr_0.8fr_0.9fr_1fr] md:gap-3'
 
 export default function Home() {
+  const { email } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -26,7 +28,7 @@ export default function Home() {
     const { data, error } = await supabase
       .from('instructions')
       .select(
-        'id,title,owner,status,created_at,updated_at,completed_at,amount,account_last4,deadline_text,client_id,clients(name,household_name)',
+        'id,title,owner,status,created_at,updated_at,completed_at,completed_by,amount,account_last4,deadline_text,client_id,clients(name,household_name)',
       )
       .in('status', statuses)
       .order(order.col, { ascending: order.asc })
@@ -76,14 +78,18 @@ export default function Home() {
       setItems((prev) => prev.filter((i) => i.id !== id))
       const { error } = await supabase
         .from('instructions')
-        .update({ status: 'done', completed_at: new Date().toISOString() })
+        .update({
+          status: 'done',
+          completed_at: new Date().toISOString(),
+          completed_by: email,
+        })
         .eq('id', id)
       if (error) {
         setError(error.message)
         load()
       }
     },
-    [load],
+    [load, email],
   )
 
   const filtered = items.filter(
@@ -273,7 +279,9 @@ function Row({ item, onMarkDone }) {
         )}
         <span className="text-xs text-slate-500">
           {done && item.completed_at
-            ? `done ${relativeTime(item.completed_at)}`
+            ? `done ${relativeTime(item.completed_at)}${
+                item.completed_by ? ` by ${item.completed_by}` : ''
+              }`
             : relativeTime(item.updated_at)}
         </span>
       </div>

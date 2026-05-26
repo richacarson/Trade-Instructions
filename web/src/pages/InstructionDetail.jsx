@@ -188,10 +188,27 @@ export default function InstructionDetail() {
   }, [load, id])
 
   const patchInstruction = async (patch) => {
-    setData((d) => ({ ...d, ...patch }))
+    // When transitioning into 'done', also stamp who and when so we can
+    // show "done by X on Y". Reverting out of done clears those fields
+    // so re-completing later attributes correctly.
+    let payload = patch
+    if (patch.status === 'done' && data?.status !== 'done') {
+      payload = {
+        ...patch,
+        completed_at: new Date().toISOString(),
+        completed_by: email,
+      }
+    } else if (
+      patch.status &&
+      patch.status !== 'done' &&
+      data?.status === 'done'
+    ) {
+      payload = { ...patch, completed_at: null, completed_by: null }
+    }
+    setData((d) => ({ ...d, ...payload }))
     const { error } = await supabase
       .from('instructions')
-      .update(patch)
+      .update(payload)
       .eq('id', id)
     if (error) {
       setError(error.message)
@@ -288,6 +305,12 @@ export default function InstructionDetail() {
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             {data.status !== 'done' ? <StaleBadge createdAt={data.created_at} /> : null}
+            {data.status === 'done' && data.completed_at ? (
+              <span className="rounded-full bg-sage/15 px-2 py-0.5 text-sage">
+                Done {formatDateTime(data.completed_at)}
+                {data.completed_by ? ` by ${data.completed_by}` : ''}
+              </span>
+            ) : null}
             {data.meeting_date ? (
               <span>· Meeting {formatDate(data.meeting_date)}</span>
             ) : null}

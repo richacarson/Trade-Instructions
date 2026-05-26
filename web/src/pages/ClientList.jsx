@@ -230,9 +230,11 @@ export default function ClientList() {
                   </>
                 ) : (
                   <>
-                    <Link
-                      to={`/client/${c.id}`}
-                      className="min-w-0 flex-1 hover:text-gold"
+                    <button
+                      type="button"
+                      onClick={() => startEdit(c)}
+                      className="min-w-0 flex-1 text-left hover:text-gold"
+                      title="Tap to rename"
                     >
                       <div className="truncate font-medium text-slate-100">
                         {c.name}
@@ -242,7 +244,7 @@ export default function ClientList() {
                           {c.household_name}
                         </div>
                       ) : null}
-                    </Link>
+                    </button>
                     <span
                       className={[
                         'shrink-0 rounded-full px-2.5 py-0.5 font-mono text-xs',
@@ -253,13 +255,12 @@ export default function ClientList() {
                     >
                       {open} open
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(c)}
+                    <Link
+                      to={`/client/${c.id}`}
                       className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
                     >
-                      Edit
-                    </button>
+                      View
+                    </Link>
                     <button
                       type="button"
                       onClick={() => deleteClient(c)}

@@ -223,26 +223,6 @@ export default function InstructionDetail() {
           <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
             {data.title}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {data.amount != null ? (
-              <span className="rounded bg-gold/15 px-2 py-0.5 font-mono text-sm text-gold">
-                ${Number(data.amount).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            ) : null}
-            {data.account_last4 ? (
-              <span className="rounded bg-white/5 px-2 py-0.5 font-mono text-sm text-slate-300">
-                xxxx-{data.account_last4}
-              </span>
-            ) : null}
-            {data.deadline_text ? (
-              <span className="rounded bg-red-400/15 px-2 py-0.5 text-sm text-red-200">
-                {data.deadline_text}
-              </span>
-            ) : null}
-          </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             {data.status !== 'done' ? <StaleBadge createdAt={data.created_at} /> : null}
             {data.meeting_date ? (
@@ -259,6 +239,38 @@ export default function InstructionDetail() {
           Delete
         </button>
       </header>
+
+      {(data.amount != null || data.account_last4 || data.deadline_text) ? (
+        <div className="card mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
+          {data.amount != null ? (
+            <div>
+              <div className="label">Amount</div>
+              <div className="mt-0.5 font-mono text-lg text-gold">
+                ${Number(data.amount).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+            </div>
+          ) : null}
+          {data.account_last4 ? (
+            <div>
+              <div className="label">Account</div>
+              <div className="mt-0.5 font-mono text-lg text-slate-100">
+                xxxx-{data.account_last4}
+              </div>
+            </div>
+          ) : null}
+          {data.deadline_text ? (
+            <div>
+              <div className="label">Deadline</div>
+              <div className="mt-0.5 text-base text-red-200">
+                {data.deadline_text}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="card mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
         <div>

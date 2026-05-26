@@ -26,7 +26,7 @@ export default function Home() {
     const { data, error } = await supabase
       .from('instructions')
       .select(
-        'id,title,owner,status,created_at,updated_at,completed_at,client_id,clients(name,household_name)',
+        'id,title,owner,status,created_at,updated_at,completed_at,amount,account_last4,deadline_text,client_id,clients(name,household_name)',
       )
       .in('status', statuses)
       .order(order.col, { ascending: order.asc })
@@ -171,16 +171,50 @@ export default function Home() {
 }
 
 function Row({ item }) {
+  const done = item.status === 'done'
+  const amountFmt =
+    item.amount != null
+      ? `$${Number(item.amount).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : null
+  const meta = [
+    amountFmt,
+    item.account_last4 ? `xxxx-${item.account_last4}` : null,
+    item.deadline_text,
+  ].filter(Boolean)
   return (
     <Link
       to={`/instruction/${item.id}`}
-      className={`block px-4 py-3 transition hover:bg-white/[0.04] md:items-center ${GRID}`}
+      className={`block px-4 py-3 transition hover:bg-white/[0.04] md:items-start ${GRID}`}
     >
       <div className="text-sm text-sage md:truncate">
         {item.clients?.name ?? 'Unknown client'}
       </div>
-      <div className="mt-0.5 font-medium text-slate-100 md:mt-0 md:truncate">
-        {item.title}
+      <div className="mt-0.5 md:mt-0">
+        <div className="font-medium leading-snug text-slate-100">
+          {item.title}
+        </div>
+        {meta.length > 0 ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {amountFmt ? (
+              <span className="rounded bg-gold/15 px-1.5 py-0.5 font-mono text-xs text-gold">
+                {amountFmt}
+              </span>
+            ) : null}
+            {item.account_last4 ? (
+              <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs text-slate-300">
+                xxxx-{item.account_last4}
+              </span>
+            ) : null}
+            {item.deadline_text ? (
+              <span className="rounded bg-red-400/15 px-1.5 py-0.5 text-xs text-red-200">
+                {item.deadline_text}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="mt-1 text-sm text-slate-400 md:mt-0">
         {item.owner ?? 'Unassigned'}
@@ -189,9 +223,17 @@ function Row({ item }) {
         <StatusBadge status={item.status} />
       </div>
       <div className="mt-2 flex items-center gap-2 md:mt-0 md:flex-col md:items-start md:gap-0.5">
-        <StaleBadge createdAt={item.created_at} />
+        {done ? (
+          <span className="rounded-full bg-sage/15 px-2 py-0.5 font-mono text-xs text-sage">
+            Done
+          </span>
+        ) : (
+          <StaleBadge createdAt={item.created_at} />
+        )}
         <span className="text-xs text-slate-500">
-          {relativeTime(item.updated_at)}
+          {done && item.completed_at
+            ? `done ${relativeTime(item.completed_at)}`
+            : relativeTime(item.updated_at)}
         </span>
       </div>
     </Link>

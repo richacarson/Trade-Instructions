@@ -62,12 +62,9 @@ function buildTitle(item) {
         maximumFractionDigits: 2,
       })}`
     : ''
-  const acct = item.account_last4 ? `xxxx-${item.account_last4}` : ''
-  const who = item.client_name || acct || 'Unknown'
-  const parts = [item.action || 'Trade instruction', amt, '—', who]
-    .filter(Boolean)
-    .join(' ')
-  return parts.trim().slice(0, 200)
+  // Client is shown in its own column, so don't repeat it in the title.
+  const parts = [item.action || 'Trade instruction', amt].filter(Boolean)
+  return parts.join(' ').trim().slice(0, 200)
 }
 
 export default function ImportScreenshot() {
@@ -228,6 +225,7 @@ export default function ImportScreenshot() {
           .filter(Boolean)
           .join('\n')
 
+        const amountNum = it.amount ? Number(String(it.amount).replace(/[^0-9.]/g, '')) : null
         const { data: created, error: insErr } = await supabase
           .from('instructions')
           .insert({
@@ -238,6 +236,9 @@ export default function ImportScreenshot() {
             source: 'screenshot',
             raw_text: it.raw_text || null,
             screenshot_path: screenshotPath,
+            amount: Number.isFinite(amountNum) ? amountNum : null,
+            account_last4: it.account_last4 || null,
+            deadline_text: it.deadline || null,
           })
           .select('id')
           .single()

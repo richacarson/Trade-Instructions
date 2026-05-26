@@ -205,16 +205,37 @@ export default function ImportScreenshot() {
       }
 
       let createdId = null
+      // Dedupe new-client creates within this batch: many items in one
+      // screenshot often refer to the same person. Also re-check against
+      // existing clients with a case-insensitive match in case something
+      // was created since page load.
+      const newClientIdByName = new Map()
       for (const it of toCreate) {
         let clientId = it.clientChoice.id
         if (!clientId) {
-          const { data, error } = await supabase
-            .from('clients')
-            .insert({ name: it.clientChoice.name })
-            .select('id')
-            .single()
-          if (error) throw error
-          clientId = data.id
+          const key = it.clientChoice.name.trim().toLowerCase()
+          if (newClientIdByName.has(key)) {
+            clientId = newClientIdByName.get(key)
+          } else {
+            const { data: existing } = await supabase
+              .from('clients')
+              .select('id')
+              .ilike('name', it.clientChoice.name.trim())
+              .limit(1)
+              .maybeSingle()
+            if (existing?.id) {
+              clientId = existing.id
+            } else {
+              const { data, error } = await supabase
+                .from('clients')
+                .insert({ name: it.clientChoice.name.trim() })
+                .select('id')
+                .single()
+              if (error) throw error
+              clientId = data.id
+            }
+            newClientIdByName.set(key, clientId)
+          }
         }
         const description = [
           it.account_last4 ? `Account: xxxx-${it.account_last4}` : '',

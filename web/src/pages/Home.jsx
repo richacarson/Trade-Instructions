@@ -8,7 +8,7 @@ import StaleBadge from '../components/StaleBadge'
 import StatusBadge from '../components/StatusBadge'
 import { ErrorBox, EmptyState } from '../components/States'
 
-const GRID = 'md:grid md:grid-cols-[1.3fr_2.2fr_0.9fr_0.9fr_0.9fr] md:gap-3'
+const GRID = 'md:grid md:grid-cols-[1.1fr_2fr_0.8fr_0.8fr_0.9fr_1fr] md:gap-3'
 
 export default function Home() {
   const [items, setItems] = useState([])
@@ -173,6 +173,7 @@ export default function Home() {
           >
             <span>Client</span>
             <span>Title</span>
+            <span>Account</span>
             <span>Owner</span>
             <span>Status</span>
             <span>Days / Activity</span>
@@ -212,7 +213,7 @@ function Row({ item, onMarkDone }) {
         <div className="font-medium leading-snug text-slate-100">
           {item.title}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 md:hidden">
           {amountFmt ? (
             <span className="rounded bg-gold/15 px-1.5 py-0.5 font-mono text-xs text-gold">
               {amountFmt}
@@ -229,6 +230,11 @@ function Row({ item, onMarkDone }) {
             </span>
           ) : null}
         </div>
+        {amountFmt ? (
+          <div className="mt-1 hidden font-mono text-xs text-gold md:block">
+            {amountFmt}
+          </div>
+        ) : null}
         {!done ? (
           <button
             type="button"
@@ -238,6 +244,9 @@ function Row({ item, onMarkDone }) {
             <CheckIcon /> Mark done
           </button>
         ) : null}
+      </div>
+      <div className="mt-1 hidden font-mono text-sm text-slate-200 md:block">
+        {item.account_last4 ? `xxxx-${item.account_last4}` : '—'}
       </div>
       <div className="mt-1 text-sm text-slate-400 md:mt-0">
         {item.owner ?? 'Unassigned'}

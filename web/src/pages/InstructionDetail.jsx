@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { STATUSES } from '../lib/constants'
 import { formatDate, formatDateTime, relativeTime } from '../lib/format'
+import { compressImage } from '../lib/images'
 import Spinner from '../components/Spinner'
 import StaleBadge from '../components/StaleBadge'
 import OwnerSelect from '../components/OwnerSelect'
@@ -31,9 +32,12 @@ export default function InstructionDetail() {
   const [note, setNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
   const [screenshotUrl, setScreenshotUrl] = useState(null)
+  const [attachments, setAttachments] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const attachmentInputRef = useRef(null)
 
   const load = useCallback(async () => {
-    const [insRes, stepRes, actRes] = await Promise.all([
+    const [insRes, stepRes, actRes, attRes] = await Promise.all([
       supabase
         .from('instructions')
         .select('*, clients(id,name,household_name)')
@@ -49,6 +53,11 @@ export default function InstructionDetail() {
         .select('*')
         .eq('instruction_id', id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('instruction_attachments')
+        .select('*')
+        .eq('instruction_id', id)
+        .order('created_at', { ascending: true }),
     ])
     if (insRes.error) {
       setError(insRes.error.message)
@@ -63,9 +72,63 @@ export default function InstructionDetail() {
     setData(insRes.data)
     setSteps(stepRes.data ?? [])
     setActivity(actRes.data ?? [])
+    // Sign URLs for every attachment so they render in <img> tags.
+    const rows = attRes.data ?? []
+    const signed = await Promise.all(
+      rows.map(async (a) => {
+        const { data: s } = await supabase.storage
+          .from('screenshots')
+          .createSignedUrl(a.storage_path, 60 * 60)
+        return { ...a, url: s?.signedUrl ?? null }
+      }),
+    )
+    setAttachments(signed)
     setError(null)
     setLoading(false)
   }, [id])
+
+  const addAttachments = async (files) => {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    setError(null)
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      const userId = user?.id ?? 'anon'
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue
+        const blob = await compressImage(file)
+        const path = `${userId}/attachments/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}.jpg`
+        const { error: upErr } = await supabase.storage
+          .from('screenshots')
+          .upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+        if (upErr) throw new Error(`Upload failed: ${upErr.message}`)
+        const { error: insErr } = await supabase
+          .from('instruction_attachments')
+          .insert({
+            instruction_id: id,
+            storage_path: path,
+            uploaded_by: email,
+          })
+        if (insErr) throw new Error(insErr.message)
+      }
+      load()
+    } catch (err) {
+      setError(err.message ?? 'Could not upload attachment.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeAttachment = async (att) => {
+    if (!window.confirm('Remove this attachment?')) return
+    await supabase.storage.from('screenshots').remove([att.storage_path])
+    await supabase.from('instruction_attachments').delete().eq('id', att.id)
+    load()
+  }
 
   useEffect(() => {
     if (!data?.screenshot_path) {
@@ -341,18 +404,77 @@ export default function InstructionDetail() {
         </details>
       ) : null}
 
-      {screenshotUrl ? (
-        <div className="card mb-4 p-4">
-          <h2 className="label mb-2">Screenshot</h2>
-          <a href={screenshotUrl} target="_blank" rel="noreferrer">
-            <img
-              src={screenshotUrl}
-              alt="Source screenshot"
-              className="max-h-[480px] w-full rounded-md object-contain"
-            />
-          </a>
+      <div className="card mb-4 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg text-slate-100">Attachments</h2>
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              addAttachments(Array.from(e.target.files ?? []))
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => attachmentInputRef.current?.click()}
+            disabled={uploading}
+            className="rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold hover:bg-gold/20 disabled:opacity-50"
+          >
+            {uploading ? 'Uploading…' : 'Add screenshot'}
+          </button>
         </div>
-      ) : null}
+        {screenshotUrl || attachments.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {screenshotUrl ? (
+              <a
+                href={screenshotUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block overflow-hidden rounded-md ring-1 ring-white/10"
+                title="Original source screenshot"
+              >
+                <img
+                  src={screenshotUrl}
+                  alt="Source screenshot"
+                  className="h-36 w-full object-cover"
+                />
+              </a>
+            ) : null}
+            {attachments.map((att) =>
+              att.url ? (
+                <div
+                  key={att.id}
+                  className="group relative overflow-hidden rounded-md ring-1 ring-white/10"
+                >
+                  <a href={att.url} target="_blank" rel="noreferrer">
+                    <img
+                      src={att.url}
+                      alt="Attachment"
+                      className="h-36 w-full object-cover"
+                    />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(att)}
+                    className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-red-200 opacity-0 transition group-hover:opacity-100"
+                    aria-label="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : null,
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">
+            No attachments yet. Add a screenshot for reference.
+          </p>
+        )}
+      </div>
 
       <div className="card p-4">
         <h2 className="mb-3 font-display text-lg text-slate-100">Activity</h2>

@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
+import { compressImage } from '../lib/images'
 import OwnerSelect from '../components/OwnerSelect'
 import ClientAutocomplete from '../components/ClientAutocomplete'
 import { ErrorBox } from '../components/States'
@@ -8,6 +10,7 @@ import { BackIcon } from '../components/Icons'
 
 export default function NewInstruction() {
   const navigate = useNavigate()
+  const { email } = useAuth()
   const [clients, setClients] = useState([])
   const [clientChoice, setClientChoice] = useState(null)
   const [title, setTitle] = useState('')
@@ -15,8 +18,10 @@ export default function NewInstruction() {
   const [owner, setOwner] = useState('Carson')
   const [meetingDate, setMeetingDate] = useState('')
   const [steps, setSteps] = useState([''])
+  const [pendingFiles, setPendingFiles] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     supabase
@@ -82,6 +87,32 @@ export default function NewInstruction() {
             })),
           )
         if (stepErr) throw stepErr
+      }
+
+      // Upload any attached reference screenshots, link them to the new instruction.
+      if (pendingFiles.length > 0) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        const userId = user?.id ?? 'anon'
+        for (const file of pendingFiles) {
+          if (!file.type.startsWith('image/')) continue
+          const blob = await compressImage(file)
+          const path = `${userId}/attachments/${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}.jpg`
+          const { error: upErr } = await supabase.storage
+            .from('screenshots')
+            .upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+          if (upErr) throw new Error(`Attachment upload failed: ${upErr.message}`)
+          await supabase
+            .from('instruction_attachments')
+            .insert({
+              instruction_id: created.id,
+              storage_path: path,
+              uploaded_by: email,
+            })
+        }
       }
 
       navigate(`/instruction/${created.id}`)
@@ -194,6 +225,49 @@ export default function NewInstruction() {
           <button type="button" onClick={addStep} className="btn-ghost mt-2">
             + Add step
           </button>
+        </div>
+
+        <div>
+          <label className="label">Reference screenshots</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              setPendingFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])])
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="btn-ghost"
+          >
+            + Attach screenshot
+          </button>
+          {pendingFiles.length > 0 ? (
+            <ul className="mt-2 space-y-1">
+              {pendingFiles.map((f, i) => (
+                <li
+                  key={i}
+                  className="flex items-center justify-between rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300"
+                >
+                  <span className="truncate">{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPendingFiles((prev) => prev.filter((_, j) => j !== i))
+                    }
+                    className="ml-2 shrink-0 text-slate-500 hover:text-red-300"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
 
         {error ? <ErrorBox message={error} /> : null}

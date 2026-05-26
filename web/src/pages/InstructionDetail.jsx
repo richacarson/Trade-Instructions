@@ -303,37 +303,48 @@ export default function InstructionDetail() {
         </button>
       </header>
 
-      {(data.amount != null || data.account_last4 || data.deadline_text) ? (
-        <div className="card mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
-          {data.amount != null ? (
-            <div>
-              <div className="label">Amount</div>
-              <div className="mt-0.5 font-mono text-lg text-gold">
-                ${Number(data.amount).toLocaleString(undefined, {
+      <div className="card mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
+        <InlineField
+          label="Amount"
+          value={
+            data.amount != null
+              ? `$${Number(data.amount).toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
-                })}
-              </div>
-            </div>
-          ) : null}
-          {data.account_last4 ? (
-            <div>
-              <div className="label">Account</div>
-              <div className="mt-0.5 font-mono text-lg text-slate-100">
-                xxxx-{data.account_last4}
-              </div>
-            </div>
-          ) : null}
-          {data.deadline_text ? (
-            <div>
-              <div className="label">Deadline</div>
-              <div className="mt-0.5 text-base text-red-200">
-                {data.deadline_text}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+                })}`
+              : null
+          }
+          editValue={data.amount != null ? String(data.amount) : ''}
+          placeholder="Add amount"
+          inputMode="decimal"
+          valueClass="font-mono text-lg text-gold"
+          onSave={(v) => {
+            const n = v.trim() === '' ? null : Number(v.replace(/[^0-9.]/g, ''))
+            return patchInstruction({ amount: Number.isFinite(n) ? n : null })
+          }}
+        />
+        <InlineField
+          label="Account"
+          value={data.account_last4 ? `xxxx-${data.account_last4}` : null}
+          editValue={data.account_last4 ?? ''}
+          placeholder="Add account #"
+          inputMode="numeric"
+          maxLength={4}
+          valueClass="font-mono text-lg text-slate-100"
+          onSave={(v) => {
+            const digits = v.replace(/[^0-9]/g, '').slice(-4)
+            return patchInstruction({ account_last4: digits || null })
+          }}
+        />
+        <InlineField
+          label="Deadline"
+          value={data.deadline_text || null}
+          editValue={data.deadline_text ?? ''}
+          placeholder="Add deadline"
+          valueClass="text-base text-red-200"
+          onSave={(v) => patchInstruction({ deadline_text: v.trim() || null })}
+        />
+      </div>
 
       <div className="card mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
         <div>
@@ -581,5 +592,74 @@ function ActivityRow({ entry }) {
         </p>
       </div>
     </li>
+  )
+}
+
+function InlineField({
+  label,
+  value,
+  editValue,
+  placeholder,
+  valueClass = 'text-base text-slate-100',
+  inputMode,
+  maxLength,
+  onSave,
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(editValue)
+  useEffect(() => {
+    setDraft(editValue)
+  }, [editValue])
+
+  const commit = async () => {
+    await onSave(draft)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div>
+        <div className="label">{label}</div>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <input
+            autoFocus
+            inputMode={inputMode}
+            maxLength={maxLength}
+            className="input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit()
+              if (e.key === 'Escape') {
+                setDraft(editValue)
+                setEditing(false)
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={commit}
+            className="shrink-0 rounded-md bg-gold px-2.5 py-1.5 text-xs font-medium text-navy"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="text-left transition hover:bg-white/[0.02] rounded-md -m-1 p-1"
+    >
+      <div className="label">{label}</div>
+      {value ? (
+        <div className={`mt-0.5 ${valueClass}`}>{value}</div>
+      ) : (
+        <div className="mt-0.5 text-sm text-slate-500">{placeholder}</div>
+      )}
+    </button>
   )
 }

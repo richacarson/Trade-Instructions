@@ -449,13 +449,27 @@ export default function ImportScreenshot() {
   )
 }
 
+// Households at Paradiem are tracked by surname (e.g. "Brown", "Simpson"),
+// not full name — Garry Brown and Linda Brown both belong to the "Brown"
+// client. Strip the first name(s) from whatever the extractor returned.
+function lastNameOnly(name) {
+  if (!name) return ''
+  const tokens = name.trim().split(/\s+/)
+  return tokens[tokens.length - 1] || ''
+}
+
 function prefillClient(clients, name) {
-  if (!name) return null
-  const trimmed = name.trim()
-  const lower = trimmed.toLowerCase()
-  const match = clients.find((c) => c.name.toLowerCase() === lower)
-  if (match) return { id: match.id, name: match.name }
-  // No existing client matches — pre-select "create new client with this name"
-  // so the operator doesn't have to pick anything.
-  return { id: null, name: trimmed }
+  const last = lastNameOnly(name)
+  if (!last) return null
+  const lower = last.toLowerCase()
+  // Prefer an exact match on the surname; fall back to any client whose
+  // name ends with the surname (covers older full-name records).
+  const exact = clients.find((c) => c.name.trim().toLowerCase() === lower)
+  if (exact) return { id: exact.id, name: exact.name }
+  const endsWith = clients.find((c) =>
+    c.name.trim().toLowerCase().endsWith(' ' + lower),
+  )
+  if (endsWith) return { id: endsWith.id, name: endsWith.name }
+  // No match — pre-select "create new client with surname".
+  return { id: null, name: last }
 }

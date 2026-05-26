@@ -15,6 +15,9 @@ export default function NewInstruction() {
   const [clientChoice, setClientChoice] = useState(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [amount, setAmount] = useState('')
+  const [accountLast4, setAccountLast4] = useState('')
+  const [deadlineText, setDeadlineText] = useState('')
   const [owner, setOwner] = useState('Carson')
   const [meetingDate, setMeetingDate] = useState('')
   const [steps, setSteps] = useState([''])
@@ -70,6 +73,11 @@ export default function NewInstruction() {
           owner: owner || null,
           meeting_date: meetingDate || null,
           source: 'manual',
+          amount: amount.trim()
+            ? Number(amount.replace(/[^0-9.]/g, '')) || null
+            : null,
+          account_last4: accountLast4.replace(/[^0-9]/g, '').slice(-4) || null,
+          deadline_text: deadlineText.trim() || null,
         })
         .select('id')
         .single()
@@ -162,6 +170,48 @@ export default function NewInstruction() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className="label" htmlFor="amount">
+              Amount ($)
+            </label>
+            <input
+              id="amount"
+              inputMode="decimal"
+              className="input"
+              placeholder="e.g. 3820.59"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="acct">
+              Account (last 4)
+            </label>
+            <input
+              id="acct"
+              inputMode="numeric"
+              maxLength={4}
+              className="input"
+              placeholder="e.g. 9961"
+              value={accountLast4}
+              onChange={(e) => setAccountLast4(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="deadline">
+              Deadline
+            </label>
+            <input
+              id="deadline"
+              className="input"
+              placeholder="e.g. Before EOD"
+              value={deadlineText}
+              onChange={(e) => setDeadlineText(e.target.value)}
+            />
+          </div>
         </div>
 
         <div>

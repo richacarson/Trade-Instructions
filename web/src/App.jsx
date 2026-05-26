@@ -9,6 +9,7 @@ import ClientList from './pages/ClientList'
 import ClientDetail from './pages/ClientDetail'
 import InstructionDetail from './pages/InstructionDetail'
 import NewInstruction from './pages/NewInstruction'
+import ImportScreenshot from './pages/ImportScreenshot'
 
 function Gate() {
   const { loading, session, allowed } = useAuth()
@@ -31,6 +32,7 @@ function Gate() {
         <Route path="/client/:id" element={<ClientDetail />} />
         <Route path="/instruction/:id" element={<InstructionDetail />} />
         <Route path="/new" element={<NewInstruction />} />
+        <Route path="/new/screenshot" element={<ImportScreenshot />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

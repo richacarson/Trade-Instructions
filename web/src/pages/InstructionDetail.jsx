@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { STATUSES } from '../lib/constants'
 import { formatDate, formatDateTime, relativeTime } from '../lib/format'
+import { compressImage } from '../lib/images'
 import Spinner from '../components/Spinner'
 import StaleBadge from '../components/StaleBadge'
 import OwnerSelect from '../components/OwnerSelect'
@@ -20,6 +21,7 @@ const ACTION_TEXT = {
 
 export default function InstructionDetail() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { email } = useAuth()
   const [data, setData] = useState(null)
   const [steps, setSteps] = useState([])
@@ -29,9 +31,13 @@ export default function InstructionDetail() {
   const [error, setError] = useState(null)
   const [note, setNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [screenshotUrl, setScreenshotUrl] = useState(null)
+  const [attachments, setAttachments] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const attachmentInputRef = useRef(null)
 
   const load = useCallback(async () => {
-    const [insRes, stepRes, actRes] = await Promise.all([
+    const [insRes, stepRes, actRes, attRes] = await Promise.all([
       supabase
         .from('instructions')
         .select('*, clients(id,name,household_name)')
@@ -47,6 +53,11 @@ export default function InstructionDetail() {
         .select('*')
         .eq('instruction_id', id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('instruction_attachments')
+        .select('*')
+        .eq('instruction_id', id)
+        .order('created_at', { ascending: true }),
     ])
     if (insRes.error) {
       setError(insRes.error.message)
@@ -61,9 +72,80 @@ export default function InstructionDetail() {
     setData(insRes.data)
     setSteps(stepRes.data ?? [])
     setActivity(actRes.data ?? [])
+    // Sign URLs for every attachment so they render in <img> tags.
+    const rows = attRes.data ?? []
+    const signed = await Promise.all(
+      rows.map(async (a) => {
+        const { data: s } = await supabase.storage
+          .from('screenshots')
+          .createSignedUrl(a.storage_path, 60 * 60)
+        return { ...a, url: s?.signedUrl ?? null }
+      }),
+    )
+    setAttachments(signed)
     setError(null)
     setLoading(false)
   }, [id])
+
+  const addAttachments = async (files) => {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    setError(null)
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      const userId = user?.id ?? 'anon'
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue
+        const blob = await compressImage(file)
+        const path = `${userId}/attachments/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}.jpg`
+        const { error: upErr } = await supabase.storage
+          .from('screenshots')
+          .upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+        if (upErr) throw new Error(`Upload failed: ${upErr.message}`)
+        const { error: insErr } = await supabase
+          .from('instruction_attachments')
+          .insert({
+            instruction_id: id,
+            storage_path: path,
+            uploaded_by: email,
+          })
+        if (insErr) throw new Error(insErr.message)
+      }
+      load()
+    } catch (err) {
+      setError(err.message ?? 'Could not upload attachment.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeAttachment = async (att) => {
+    if (!window.confirm('Remove this attachment?')) return
+    await supabase.storage.from('screenshots').remove([att.storage_path])
+    await supabase.from('instruction_attachments').delete().eq('id', att.id)
+    load()
+  }
+
+  useEffect(() => {
+    if (!data?.screenshot_path) {
+      setScreenshotUrl(null)
+      return
+    }
+    let cancelled = false
+    supabase.storage
+      .from('screenshots')
+      .createSignedUrl(data.screenshot_path, 60 * 60)
+      .then(({ data: signed }) => {
+        if (!cancelled) setScreenshotUrl(signed?.signedUrl ?? null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [data?.screenshot_path])
 
   useEffect(() => {
     load()
@@ -106,10 +188,27 @@ export default function InstructionDetail() {
   }, [load, id])
 
   const patchInstruction = async (patch) => {
-    setData((d) => ({ ...d, ...patch }))
+    // When transitioning into 'done', also stamp who and when so we can
+    // show "done by X on Y". Reverting out of done clears those fields
+    // so re-completing later attributes correctly.
+    let payload = patch
+    if (patch.status === 'done' && data?.status !== 'done') {
+      payload = {
+        ...patch,
+        completed_at: new Date().toISOString(),
+        completed_by: email,
+      }
+    } else if (
+      patch.status &&
+      patch.status !== 'done' &&
+      data?.status === 'done'
+    ) {
+      payload = { ...patch, completed_at: null, completed_by: null }
+    }
+    setData((d) => ({ ...d, ...payload }))
     const { error } = await supabase
       .from('instructions')
-      .update(patch)
+      .update(payload)
       .eq('id', id)
     if (error) {
       setError(error.message)
@@ -130,6 +229,21 @@ export default function InstructionDetail() {
       setError(error.message)
       load()
     }
+  }
+
+  const deleteInstruction = async () => {
+    if (!window.confirm('Delete this instruction permanently? This cannot be undone.')) {
+      return
+    }
+    if (data?.screenshot_path) {
+      await supabase.storage.from('screenshots').remove([data.screenshot_path])
+    }
+    const { error } = await supabase.from('instructions').delete().eq('id', id)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    navigate('/')
   }
 
   const submitNote = async (e) => {
@@ -184,18 +298,76 @@ export default function InstructionDetail() {
         </div>
       ) : null}
 
-      <header className="mb-5">
-        <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
-          {data.title}
-        </h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <StaleBadge createdAt={data.created_at} />
-          {data.meeting_date ? (
-            <span>· Meeting {formatDate(data.meeting_date)}</span>
-          ) : null}
-          <span>· Source: {data.source}</span>
+      <header className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
+            {data.title}
+          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            {data.status !== 'done' ? <StaleBadge createdAt={data.created_at} /> : null}
+            {data.status === 'done' && data.completed_at ? (
+              <span className="rounded-full bg-sage/15 px-2 py-0.5 text-sage">
+                Done {formatDateTime(data.completed_at)}
+                {data.completed_by ? ` by ${data.completed_by}` : ''}
+              </span>
+            ) : null}
+            {data.meeting_date ? (
+              <span>· Meeting {formatDate(data.meeting_date)}</span>
+            ) : null}
+            <span>· Source: {data.source}</span>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={deleteInstruction}
+          className="shrink-0 rounded-md border border-red-400/30 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-400/10"
+        >
+          Delete
+        </button>
       </header>
+
+      <div className="card mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
+        <InlineField
+          label="Amount"
+          value={
+            data.amount != null
+              ? `$${Number(data.amount).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`
+              : null
+          }
+          editValue={data.amount != null ? String(data.amount) : ''}
+          placeholder="Add amount"
+          inputMode="decimal"
+          valueClass="font-mono text-lg text-gold"
+          onSave={(v) => {
+            const n = v.trim() === '' ? null : Number(v.replace(/[^0-9.]/g, ''))
+            return patchInstruction({ amount: Number.isFinite(n) ? n : null })
+          }}
+        />
+        <InlineField
+          label="Account"
+          value={data.account_last4 ? `xxxx-${data.account_last4}` : null}
+          editValue={data.account_last4 ?? ''}
+          placeholder="Add account #"
+          inputMode="numeric"
+          maxLength={4}
+          valueClass="font-mono text-lg text-slate-100"
+          onSave={(v) => {
+            const digits = v.replace(/[^0-9]/g, '').slice(-4)
+            return patchInstruction({ account_last4: digits || null })
+          }}
+        />
+        <InlineField
+          label="Deadline"
+          value={data.deadline_text || null}
+          editValue={data.deadline_text ?? ''}
+          placeholder="Add deadline"
+          valueClass="text-base text-red-200"
+          onSave={(v) => patchInstruction({ deadline_text: v.trim() || null })}
+        />
+      </div>
 
       <div className="card mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
         <div>
@@ -265,6 +437,78 @@ export default function InstructionDetail() {
           </p>
         </details>
       ) : null}
+
+      <div className="card mb-4 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg text-slate-100">Attachments</h2>
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              addAttachments(Array.from(e.target.files ?? []))
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => attachmentInputRef.current?.click()}
+            disabled={uploading}
+            className="rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold hover:bg-gold/20 disabled:opacity-50"
+          >
+            {uploading ? 'Uploading…' : 'Add screenshot'}
+          </button>
+        </div>
+        {screenshotUrl || attachments.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {screenshotUrl ? (
+              <a
+                href={screenshotUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block overflow-hidden rounded-md ring-1 ring-white/10"
+                title="Original source screenshot"
+              >
+                <img
+                  src={screenshotUrl}
+                  alt="Source screenshot"
+                  className="h-36 w-full object-cover"
+                />
+              </a>
+            ) : null}
+            {attachments.map((att) =>
+              att.url ? (
+                <div
+                  key={att.id}
+                  className="group relative overflow-hidden rounded-md ring-1 ring-white/10"
+                >
+                  <a href={att.url} target="_blank" rel="noreferrer">
+                    <img
+                      src={att.url}
+                      alt="Attachment"
+                      className="h-36 w-full object-cover"
+                    />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(att)}
+                    className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-red-200 opacity-0 transition group-hover:opacity-100"
+                    aria-label="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : null,
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">
+            No attachments yet. Add a screenshot for reference.
+          </p>
+        )}
+      </div>
 
       <div className="card p-4">
         <h2 className="mb-3 font-display text-lg text-slate-100">Activity</h2>
@@ -371,5 +615,74 @@ function ActivityRow({ entry }) {
         </p>
       </div>
     </li>
+  )
+}
+
+function InlineField({
+  label,
+  value,
+  editValue,
+  placeholder,
+  valueClass = 'text-base text-slate-100',
+  inputMode,
+  maxLength,
+  onSave,
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(editValue)
+  useEffect(() => {
+    setDraft(editValue)
+  }, [editValue])
+
+  const commit = async () => {
+    await onSave(draft)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div>
+        <div className="label">{label}</div>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <input
+            autoFocus
+            inputMode={inputMode}
+            maxLength={maxLength}
+            className="input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit()
+              if (e.key === 'Escape') {
+                setDraft(editValue)
+                setEditing(false)
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={commit}
+            className="shrink-0 rounded-md bg-gold px-2.5 py-1.5 text-xs font-medium text-navy"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="text-left transition hover:bg-white/[0.02] rounded-md -m-1 p-1"
+    >
+      <div className="label">{label}</div>
+      {value ? (
+        <div className={`mt-0.5 ${valueClass}`}>{value}</div>
+      ) : (
+        <div className="mt-0.5 text-sm text-slate-500">{placeholder}</div>
+      )}
+    </button>
   )
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 import { OPEN_STATUSES } from '../lib/constants'
 import { relativeTime } from '../lib/format'
 import Spinner from '../components/Spinner'
@@ -8,30 +9,36 @@ import StaleBadge from '../components/StaleBadge'
 import StatusBadge from '../components/StatusBadge'
 import { ErrorBox, EmptyState } from '../components/States'
 
-const GRID = 'md:grid md:grid-cols-[1.3fr_2.2fr_0.9fr_0.9fr_0.9fr] md:gap-3'
+const GRID = 'md:grid md:grid-cols-[1.1fr_2fr_0.8fr_0.8fr_0.9fr_1fr] md:gap-3'
 
 export default function Home() {
+  const { email } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [ownerFilter, setOwnerFilter] = useState(null)
   const [clientFilter, setClientFilter] = useState(null)
+  const [tab, setTab] = useState('open') // 'open' | 'completed'
 
   const load = useCallback(async () => {
+    const statuses = tab === 'open' ? OPEN_STATUSES : ['done']
+    const order = tab === 'open'
+      ? { col: 'updated_at', asc: true } // stalest first
+      : { col: 'completed_at', asc: false } // most recent first
     const { data, error } = await supabase
       .from('instructions')
       .select(
-        'id,title,owner,status,created_at,updated_at,client_id,clients(name,household_name)',
+        'id,title,owner,status,created_at,updated_at,completed_at,completed_by,amount,account_last4,deadline_text,client_id,clients(name,household_name)',
       )
-      .in('status', OPEN_STATUSES)
-      .order('updated_at', { ascending: true })
+      .in('status', statuses)
+      .order(order.col, { ascending: order.asc })
     if (error) setError(error.message)
     else {
       setItems(data ?? [])
       setError(null)
     }
     setLoading(false)
-  }, [])
+  }, [tab])
 
   useEffect(() => {
     load()
@@ -65,6 +72,26 @@ export default function Home() {
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [items])
 
+  const markDone = useCallback(
+    async (id) => {
+      // Optimistic update so the row disappears immediately on the Open tab.
+      setItems((prev) => prev.filter((i) => i.id !== id))
+      const { error } = await supabase
+        .from('instructions')
+        .update({
+          status: 'done',
+          completed_at: new Date().toISOString(),
+          completed_by: email,
+        })
+        .eq('id', id)
+      if (error) {
+        setError(error.message)
+        load()
+      }
+    },
+    [load, email],
+  )
+
   const filtered = items.filter(
     (i) =>
       (!ownerFilter || i.owner === ownerFilter) &&
@@ -73,14 +100,35 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 md:px-8 md:py-7">
-      <header className="mb-5">
+      <header className="mb-4">
         <h1 className="font-display text-2xl text-slate-100 md:text-3xl">
-          All Open Instructions
+          Instructions
         </h1>
         <p className="mt-1 text-sm text-slate-400">
-          {filtered.length} open · stalest first
+          {filtered.length} {tab === 'open' ? 'open · stalest first' : 'completed · most recent first'}
         </p>
       </header>
+
+      <div className="mb-4 inline-flex rounded-lg border border-white/10 bg-white/5 p-1">
+        <button
+          type="button"
+          onClick={() => setTab('open')}
+          className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition ${
+            tab === 'open' ? 'bg-gold text-navy' : 'text-slate-300 hover:text-slate-100'
+          }`}
+        >
+          Open
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('completed')}
+          className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition ${
+            tab === 'completed' ? 'bg-gold text-navy' : 'text-slate-300 hover:text-slate-100'
+          }`}
+        >
+          Completed
+        </button>
+      </div>
 
       {owners.length > 0 || clientOptions.length > 1 ? (
         <div className="mb-4 space-y-2">
@@ -115,10 +163,8 @@ export default function Home() {
       ) : filtered.length === 0 ? (
         items.length === 0 ? (
           <EmptyState
-            title="No open instructions"
-            hint="The team is all caught up. Add a new instruction when one comes in."
-            actionTo="/new"
-            actionLabel="New instruction"
+            title={tab === 'open' ? 'No open instructions' : 'No completed instructions'}
+            hint={tab === 'open' ? 'The team is all caught up.' : 'Completed instructions will show up here.'}
           />
         ) : (
           <EmptyState
@@ -133,12 +179,13 @@ export default function Home() {
           >
             <span>Client</span>
             <span>Title</span>
+            <span>Account</span>
             <span>Owner</span>
             <span>Status</span>
             <span>Days / Activity</span>
           </div>
           {filtered.map((item) => (
-            <Row key={item.id} item={item} />
+            <Row key={item.id} item={item} onMarkDone={markDone} />
           ))}
         </div>
       )}
@@ -146,31 +193,107 @@ export default function Home() {
   )
 }
 
-function Row({ item }) {
+function Row({ item, onMarkDone }) {
+  const done = item.status === 'done'
+  const amountFmt =
+    item.amount != null
+      ? `$${Number(item.amount).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : null
+  const handleDone = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onMarkDone(item.id)
+  }
   return (
     <Link
       to={`/instruction/${item.id}`}
-      className={`block px-4 py-3 transition hover:bg-white/[0.04] md:items-center ${GRID}`}
+      className={`block px-4 py-3 transition hover:bg-white/[0.04] md:items-start ${GRID}`}
     >
       <div className="text-sm text-sage md:truncate">
         {item.clients?.name ?? 'Unknown client'}
       </div>
-      <div className="mt-0.5 font-medium text-slate-100 md:mt-0 md:truncate">
-        {item.title}
+      <div className="mt-0.5 md:mt-0">
+        <div className="font-medium leading-snug text-slate-100">
+          {item.title}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 md:hidden">
+          {amountFmt ? (
+            <span className="rounded bg-gold/15 px-1.5 py-0.5 font-mono text-xs text-gold">
+              {amountFmt}
+            </span>
+          ) : null}
+          {item.account_last4 ? (
+            <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs text-slate-300">
+              Acct xxxx-{item.account_last4}
+            </span>
+          ) : null}
+          {item.deadline_text ? (
+            <span className="rounded bg-red-400/15 px-1.5 py-0.5 text-xs text-red-200">
+              {item.deadline_text}
+            </span>
+          ) : null}
+        </div>
+        {amountFmt ? (
+          <div className="mt-1 hidden font-mono text-xs text-gold md:block">
+            {amountFmt}
+          </div>
+        ) : null}
+        {!done ? (
+          <button
+            type="button"
+            onClick={handleDone}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-sage/40 bg-sage/10 px-2.5 py-1 text-xs font-medium text-sage hover:bg-sage/20 md:hidden"
+          >
+            <CheckIcon /> Mark done
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-1 hidden font-mono text-sm text-slate-200 md:block">
+        {item.account_last4 ? `xxxx-${item.account_last4}` : '—'}
       </div>
       <div className="mt-1 text-sm text-slate-400 md:mt-0">
         {item.owner ?? 'Unassigned'}
       </div>
       <div className="mt-2 md:mt-0">
         <StatusBadge status={item.status} />
+        {!done ? (
+          <button
+            type="button"
+            onClick={handleDone}
+            className="ml-2 hidden items-center gap-1 rounded-md border border-sage/40 bg-sage/10 px-2 py-0.5 text-xs font-medium text-sage hover:bg-sage/20 md:inline-flex"
+          >
+            <CheckIcon /> Done
+          </button>
+        ) : null}
       </div>
       <div className="mt-2 flex items-center gap-2 md:mt-0 md:flex-col md:items-start md:gap-0.5">
-        <StaleBadge createdAt={item.created_at} />
+        {done ? (
+          <span className="rounded-full bg-sage/15 px-2 py-0.5 font-mono text-xs text-sage">
+            Done
+          </span>
+        ) : (
+          <StaleBadge createdAt={item.created_at} />
+        )}
         <span className="text-xs text-slate-500">
-          {relativeTime(item.updated_at)}
+          {done && item.completed_at
+            ? `done ${relativeTime(item.completed_at)}${
+                item.completed_by ? ` by ${item.completed_by}` : ''
+              }`
+            : relativeTime(item.updated_at)}
         </span>
       </div>
     </Link>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m5 12 5 5L20 7" />
+    </svg>
   )
 }
 

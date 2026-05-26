@@ -70,6 +70,22 @@ export default function Home() {
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [items])
 
+  const markDone = useCallback(
+    async (id) => {
+      // Optimistic update so the row disappears immediately on the Open tab.
+      setItems((prev) => prev.filter((i) => i.id !== id))
+      const { error } = await supabase
+        .from('instructions')
+        .update({ status: 'done', completed_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) {
+        setError(error.message)
+        load()
+      }
+    },
+    [load],
+  )
+
   const filtered = items.filter(
     (i) =>
       (!ownerFilter || i.owner === ownerFilter) &&
@@ -162,7 +178,7 @@ export default function Home() {
             <span>Days / Activity</span>
           </div>
           {filtered.map((item) => (
-            <Row key={item.id} item={item} />
+            <Row key={item.id} item={item} onMarkDone={markDone} />
           ))}
         </div>
       )}
@@ -170,7 +186,7 @@ export default function Home() {
   )
 }
 
-function Row({ item }) {
+function Row({ item, onMarkDone }) {
   const done = item.status === 'done'
   const amountFmt =
     item.amount != null
@@ -179,11 +195,11 @@ function Row({ item }) {
           maximumFractionDigits: 2,
         })}`
       : null
-  const meta = [
-    amountFmt,
-    item.account_last4 ? `xxxx-${item.account_last4}` : null,
-    item.deadline_text,
-  ].filter(Boolean)
+  const handleDone = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onMarkDone(item.id)
+  }
   return (
     <Link
       to={`/instruction/${item.id}`}
@@ -196,24 +212,31 @@ function Row({ item }) {
         <div className="font-medium leading-snug text-slate-100">
           {item.title}
         </div>
-        {meta.length > 0 ? (
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            {amountFmt ? (
-              <span className="rounded bg-gold/15 px-1.5 py-0.5 font-mono text-xs text-gold">
-                {amountFmt}
-              </span>
-            ) : null}
-            {item.account_last4 ? (
-              <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs text-slate-300">
-                xxxx-{item.account_last4}
-              </span>
-            ) : null}
-            {item.deadline_text ? (
-              <span className="rounded bg-red-400/15 px-1.5 py-0.5 text-xs text-red-200">
-                {item.deadline_text}
-              </span>
-            ) : null}
-          </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          {amountFmt ? (
+            <span className="rounded bg-gold/15 px-1.5 py-0.5 font-mono text-xs text-gold">
+              {amountFmt}
+            </span>
+          ) : null}
+          {item.account_last4 ? (
+            <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs text-slate-300">
+              Acct xxxx-{item.account_last4}
+            </span>
+          ) : null}
+          {item.deadline_text ? (
+            <span className="rounded bg-red-400/15 px-1.5 py-0.5 text-xs text-red-200">
+              {item.deadline_text}
+            </span>
+          ) : null}
+        </div>
+        {!done ? (
+          <button
+            type="button"
+            onClick={handleDone}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-sage/40 bg-sage/10 px-2.5 py-1 text-xs font-medium text-sage hover:bg-sage/20 md:hidden"
+          >
+            <CheckIcon /> Mark done
+          </button>
         ) : null}
       </div>
       <div className="mt-1 text-sm text-slate-400 md:mt-0">
@@ -221,6 +244,15 @@ function Row({ item }) {
       </div>
       <div className="mt-2 md:mt-0">
         <StatusBadge status={item.status} />
+        {!done ? (
+          <button
+            type="button"
+            onClick={handleDone}
+            className="ml-2 hidden items-center gap-1 rounded-md border border-sage/40 bg-sage/10 px-2 py-0.5 text-xs font-medium text-sage hover:bg-sage/20 md:inline-flex"
+          >
+            <CheckIcon /> Done
+          </button>
+        ) : null}
       </div>
       <div className="mt-2 flex items-center gap-2 md:mt-0 md:flex-col md:items-start md:gap-0.5">
         {done ? (
@@ -237,6 +269,14 @@ function Row({ item }) {
         </span>
       </div>
     </Link>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m5 12 5 5L20 7" />
+    </svg>
   )
 }
 
